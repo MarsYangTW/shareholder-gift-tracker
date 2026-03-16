@@ -104,45 +104,30 @@
 </div>
 
 <script>
-    // 1. 配置資訊 (這部分保持您的填寫)
+    // 1. 配置資訊 (⚠️ 請務必確認 ANON_KEY 複製完整，不可有換行)
     const SUPABASE_URL = 'https://tkxodvlpbebwnpaqqnlp.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRreG9kdmxwYmVid25wYXFxbmxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzQ3MzAsImV4cCI6MjA4OTI1MDczMH0.t1QNqkOeHcQfFZBTLMuvDJk4KnaNUiZHgKaIXLB9xY0';
     
-    // 2. 初始化變數 (確保只宣告一次)
     let supabase = null;
 
+    // 2. 初始化函數 (加上一點點延遲確保 SDK 完全載入)
     function initSupabase() {
         try {
             if (typeof window.supabase === 'undefined') {
-                throw new Error('Supabase SDK 未載入');
+                console.error('SDK 未載入');
+                document.getElementById('syncStatus').innerText = '🔴 SDK 載入失敗';
+                return;
             }
-            // 建立客戶端
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             document.getElementById('syncStatus').innerText = '🟢 已連線並自動同步';
-            loadData(); // 連線成功後載入資料
+            loadData(); 
         } catch (e) {
             console.error(e);
-            document.getElementById('syncStatus').innerText = '🔴 連線失敗，請檢查設定';
+            document.getElementById('syncStatus').innerText = '🔴 連線資訊錯誤';
         }
     }
 
-    // 3. 日期計算邏輯
-    function calculateDates(meetingDateStr) {
-        if (!meetingDateStr) return { lastBuy: null, voteEnd: null };
-        const d = new Date(meetingDateStr);
-        const format = date => date.toISOString().split('T')[0];
-        
-        // 約略估算：最後買進日為 62 天前，投票截止為 3 天前
-        const lastBuyDate = new Date(new Date(meetingDateStr).setDate(new Date(meetingDateStr).getDate() - 62));
-        const voteEndDate = new Date(new Date(meetingDateStr).setDate(new Date(meetingDateStr).getDate() - 3));
-        
-        return {
-            lastBuy: format(lastBuyDate),
-            voteEnd: format(voteEndDate)
-        };
-    }
-
-    // 4. 自動抓取台股公司名稱
+    // 3. 自動抓取台股名稱 (修正 blur 事件觸發)
     document.getElementById('stockCode').addEventListener('blur', function() {
         const code = this.value.trim();
         if(!code) return;
@@ -153,26 +138,28 @@
                 document.getElementById('companyName').value = data.msgArray[0].n;
             }
             delete window[cbName];
+            script.remove();
         };
         script.src = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${code}.tw&json=1&delay=0&_=${Date.now()}&callback=${cbName}`;
         document.body.appendChild(script);
     });
 
-    // 5. 從 Supabase 讀取資料
+    // 4. 從 Supabase 讀取資料
     async function loadData() {
         if (!supabase) return;
         const { data, error } = await supabase.from('stock_gifts').select('*').order('meeting_date', { ascending: false });
         if (error) {
             console.error('讀取失敗:', error);
+            if(error.message.includes('JWT')) document.getElementById('syncStatus').innerText = '🔴 API Key 無效';
             return;
         }
         renderTable(data);
     }
 
-    // 6. 儲存資料
+    // 5. 儲存資料
     document.getElementById('saveBtn').addEventListener('click', async () => {
-        const code = document.getElementById('stockCode').value;
-        const name = document.getElementById('companyName').value;
+        const code = document.getElementById('stockCode').value.trim();
+        const name = document.getElementById('companyName').value.trim();
         const mDate = document.getElementById('meetingDate').value;
         const gift = document.getElementById('gift').value;
         const voted = document.getElementById('votedCheckbox').checked;
@@ -199,7 +186,16 @@
         }
     });
 
-    // 7. 渲染表格
+    // 日期計算與表格渲染保持不變...
+    function calculateDates(meetingDateStr) {
+        if (!meetingDateStr) return { lastBuy: null, voteEnd: null };
+        const d = new Date(meetingDateStr);
+        const format = date => date.toISOString().split('T')[0];
+        const lastBuyDate = new Date(new Date(meetingDateStr).setDate(new Date(meetingDateStr).getDate() - 62));
+        const voteEndDate = new Date(new Date(meetingDateStr).setDate(new Date(meetingDateStr).getDate() - 3));
+        return { lastBuy: format(lastBuyDate), voteEnd: format(voteEndDate) };
+    }
+
     function renderTable(data) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
@@ -220,13 +216,11 @@
         });
     }
 
-    // 8. 快速更新投票狀態
     async function toggleVote(id, isVoted) {
         await supabase.from('stock_gifts').update({ voted: isVoted }).eq('id', id);
         loadData();
     }
 
-    // 9. 刪除記錄
     async function deleteRecord(id) {
         if(confirm('確定要刪除這筆記錄嗎？')) {
             await supabase.from('stock_gifts').delete().eq('id', id);
@@ -244,8 +238,8 @@
 
     document.getElementById('clearBtn').addEventListener('click', clearForm);
 
-    // 執行初始化
-    initSupabase();
+    // 啟動
+    window.onload = initSupabase;
 </script>
 </body>
 </html>
