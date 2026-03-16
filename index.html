@@ -6,8 +6,8 @@
     <title>股東會紀念品 · 雲端同步版</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* 基礎樣式保留您的原始設計風格 */
-        * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, sans-serif; }
+        /* 基礎樣式 */
+        * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, 'Microsoft JhengHei', sans-serif; }
         body { background: #f0f4f8; margin: 0; padding: 1rem; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
         .container { max-width: 1200px; width: 100%; }
         h1 { font-size: 1.8rem; color: #1e3c5c; margin: 0 0 0.5rem 0; }
@@ -20,7 +20,6 @@
         .field label { font-size: 0.8rem; font-weight: 600; color: #2b4b6f; }
         .field input, .field select { padding: 0.6rem 1rem; border: 1px solid #ccdae8; border-radius: 12px; outline: none; }
         .field input:focus { border-color: #4a90e2; box-shadow: 0 0 0 2px rgba(74,144,226,0.2); }
-        .field input[readonly] { background: #f5f8fb; color: #666; }
         
         /* 按鈕樣式 */
         .btn-group { grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem; }
@@ -28,7 +27,7 @@
         .btn-primary { background: #1e3c5c; color: white; }
         .btn-secondary { background: #eef4fa; color: #1e3c5c; border: 1px solid #cbd6e4; }
         
-        /* 表格與手機版卡片優化 (RWD) */
+        /* 表格與手機版 RWD */
         .table-wrapper { background: white; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,20,40,0.05); overflow: hidden; }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e4edf5; }
@@ -37,26 +36,22 @@
         .badge-done { background: #d4e3fd; color: #1f5090; }
         .badge-warning { background: #fff0cf; color: #9e7100; }
         
-        /* 手機版卡片視圖 */
         @media (max-width: 768px) {
             .table-wrapper { background: transparent; box-shadow: none; }
             table, thead, tbody, th, td, tr { display: block; }
             thead tr { position: absolute; top: -9999px; left: -9999px; }
             tr { background: white; margin-bottom: 1rem; border-radius: 16px; padding: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e1eaf1; }
-            td { border: none; position: relative; padding-left: 40%; padding-top: 0.5rem; padding-bottom: 0.5rem; font-size: 0.95rem; }
-            td:before { position: absolute; top: 0.5rem; left: 0; width: 35%; padding-right: 10px; white-space: nowrap; font-weight: 600; color: #4b6f8c; font-size: 0.85rem; }
-            /* 為每個儲存格設定標題 */
+            td { border: none; position: relative; padding-left: 45%; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+            td:before { position: absolute; left: 1rem; font-weight: 600; color: #4b6f8c; }
             td:nth-of-type(1):before { content: "代號"; }
             td:nth-of-type(2):before { content: "公司"; }
-            td:nth-of-type(3):before { content: "最後買進日"; }
-            td:nth-of-type(4):before { content: "股東會日"; }
+            td:nth-of-type(3):before { content: "最後買進"; }
+            td:nth-of-type(4):before { content: "股東會"; }
             td:nth-of-type(5):before { content: "投票截止"; }
-            td:nth-of-type(6):before { content: "剩餘天數"; }
+            td:nth-of-type(6):before { content: "狀態"; }
             td:nth-of-type(7):before { content: "紀念品"; }
             td:nth-of-type(8):before { content: "已投票"; }
             td:nth-of-type(9):before { content: "操作"; }
-            .btn-group { flex-direction: column; }
-            .btn { width: 100%; text-align: center; }
         }
     </style>
 </head>
@@ -64,7 +59,7 @@
 <div class="container">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
         <h1>🗳️ 股東會紀念品</h1>
-        <div class="sync-status" id="syncStatus">☁️ 尚未連線 Supabase</div>
+        <div class="sync-status" id="syncStatus">☁️ 正在初始化...</div>
     </div>
 
     <div class="form-card">
@@ -87,7 +82,7 @@
             </div>
             <div class="field" style="flex-direction: row; align-items: center; padding-top: 1.5rem;">
                 <input type="checkbox" id="votedCheckbox" style="width: 20px; height: 20px;">
-                <label for="votedCheckbox" style="font-size: 1rem;">✅ 已完成投票</label>
+                <label for="votedCheckbox" style="font-size: 1rem; margin-left: 5px;">已完成投票</label>
             </div>
             <div class="btn-group">
                 <button class="btn btn-primary" id="saveBtn">💾 儲存並同步</button>
@@ -103,37 +98,51 @@
                     <th>代號</th><th>公司</th><th>最後買進日</th><th>股東會日</th><th>投票截止</th><th>狀態</th><th>紀念品</th><th>投票</th><th>操作</th>
                 </tr>
             </thead>
-            <tbody id="tableBody">
-                </tbody>
+            <tbody id="tableBody"></tbody>
         </table>
     </div>
 </div>
 
 <script>
-    // ⚠️ 步驟二：在此填入您的 Supabase 專案資訊
+    // 1. 配置資訊 (這部分保持您的填寫)
     const SUPABASE_URL = 'https://tkxodvlpbebwnpaqqnlp.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_JF99cdB3VSGtdBbpHRAHdA_nsjbMpOf';
     
+    // 2. 初始化變數 (確保只宣告一次)
     let supabase = null;
-    try {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        document.getElementById('syncStatus').innerText = '🟢 已連線並自動同步';
-    } catch (e) {
-        document.getElementById('syncStatus').innerText = '🔴 等待填寫 Supabase API 金鑰';
+
+    function initSupabase() {
+        try {
+            if (typeof window.supabase === 'undefined') {
+                throw new Error('Supabase SDK 未載入');
+            }
+            // 建立客戶端
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            document.getElementById('syncStatus').innerText = '🟢 已連線並自動同步';
+            loadData(); // 連線成功後載入資料
+        } catch (e) {
+            console.error(e);
+            document.getElementById('syncStatus').innerText = '🔴 連線失敗，請檢查設定';
+        }
     }
 
-    // 日期自動推算邏輯 (同原版本)
+    // 3. 日期計算邏輯
     function calculateDates(meetingDateStr) {
-        if (!meetingDateStr) return { lastBuy: null, voteStart: null, voteEnd: null };
+        if (!meetingDateStr) return { lastBuy: null, voteEnd: null };
         const d = new Date(meetingDateStr);
         const format = date => date.toISOString().split('T')[0];
+        
+        // 約略估算：最後買進日為 62 天前，投票截止為 3 天前
+        const lastBuyDate = new Date(new Date(meetingDateStr).setDate(new Date(meetingDateStr).getDate() - 62));
+        const voteEndDate = new Date(new Date(meetingDateStr).setDate(new Date(meetingDateStr).getDate() - 3));
+        
         return {
-            lastBuy: format(new Date(d.setDate(d.getDate() - 62))),
-            voteEnd: format(new Date(d.setDate(d.getDate() + 59))) // -3天
+            lastBuy: format(lastBuyDate),
+            voteEnd: format(voteEndDate)
         };
     }
 
-    // 抓取台股名稱 (保留 TWSE JSONP 邏輯)
+    // 4. 自動抓取台股公司名稱
     document.getElementById('stockCode').addEventListener('blur', function() {
         const code = this.value.trim();
         if(!code) return;
@@ -149,38 +158,48 @@
         document.body.appendChild(script);
     });
 
-    // 從 Supabase 讀取資料
+    // 5. 從 Supabase 讀取資料
     async function loadData() {
         if (!supabase) return;
         const { data, error } = await supabase.from('stock_gifts').select('*').order('meeting_date', { ascending: false });
-        if (error) { console.error(error); return; }
+        if (error) {
+            console.error('讀取失敗:', error);
+            return;
+        }
         renderTable(data);
     }
 
-    // 儲存至 Supabase
+    // 6. 儲存資料
     document.getElementById('saveBtn').addEventListener('click', async () => {
-        if (!supabase) return alert('請先設定 Supabase 金鑰');
         const code = document.getElementById('stockCode').value;
         const name = document.getElementById('companyName').value;
         const mDate = document.getElementById('meetingDate').value;
         const gift = document.getElementById('gift').value;
         const voted = document.getElementById('votedCheckbox').checked;
-        const dates = calculateDates(mDate);
 
+        if (!code || !name) return alert('請填寫股票代號與名稱');
+
+        const dates = calculateDates(mDate);
         const record = { 
-            stock_code: code, company_name: name, meeting_date: mDate || null, 
-            last_buy_date: dates.lastBuy, vote_end_date: dates.voteEnd, 
-            gift: gift, voted: voted 
+            stock_code: code, 
+            company_name: name, 
+            meeting_date: mDate || null, 
+            last_buy_date: dates.lastBuy, 
+            vote_end_date: dates.voteEnd, 
+            gift: gift, 
+            voted: voted 
         };
 
         const { error } = await supabase.from('stock_gifts').insert([record]);
         if (error) alert('儲存失敗：' + error.message);
         else {
             alert('同步成功！');
-            loadData(); // 重新載入
+            clearForm();
+            loadData();
         }
     });
 
+    // 7. 渲染表格
     function renderTable(data) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
@@ -194,22 +213,39 @@
                 <td>${row.vote_end_date || '-'}</td>
                 <td><span class="badge ${row.voted ? 'badge-done' : 'badge-warning'}">${row.voted ? '已完成' : '未投票'}</span></td>
                 <td>${row.gift || '-'}</td>
-                <td><input type="checkbox" ${row.voted ? 'checked' : ''} disabled></td>
+                <td><input type="checkbox" ${row.voted ? 'checked' : ''} onchange="toggleVote(${row.id}, this.checked)"></td>
                 <td><button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" onclick="deleteRecord(${row.id})">🗑️</button></td>
             `;
             tbody.appendChild(tr);
         });
     }
 
+    // 8. 快速更新投票狀態
+    async function toggleVote(id, isVoted) {
+        await supabase.from('stock_gifts').update({ voted: isVoted }).eq('id', id);
+        loadData();
+    }
+
+    // 9. 刪除記錄
     async function deleteRecord(id) {
-        if(confirm('確定刪除？')) {
+        if(confirm('確定要刪除這筆記錄嗎？')) {
             await supabase.from('stock_gifts').delete().eq('id', id);
             loadData();
         }
     }
 
-    // 初始載入
-    loadData();
+    function clearForm() {
+        document.getElementById('stockCode').value = '';
+        document.getElementById('companyName').value = '';
+        document.getElementById('meetingDate').value = '';
+        document.getElementById('gift').value = '';
+        document.getElementById('votedCheckbox').checked = false;
+    }
+
+    document.getElementById('clearBtn').addEventListener('click', clearForm);
+
+    // 執行初始化
+    initSupabase();
 </script>
 </body>
 </html>
