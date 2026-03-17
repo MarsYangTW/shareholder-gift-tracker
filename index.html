@@ -63,7 +63,6 @@
 </head>
 <body>
 <div class="container">
-    <!-- 標題列 + 年度篩選 + 同步狀態 -->
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 1rem;">
         <h1>🗳️ 股東會紀念品</h1>
         <div style="display: flex; align-items: center; gap: 10px;">
@@ -77,7 +76,6 @@
         </div>
     </div>
 
-    <!-- 表單卡片 -->
     <div class="form-card">
         <input type="hidden" id="editId">
         <div class="form-grid">
@@ -87,7 +85,7 @@
             </div>
             <div class="field">
                 <label>🏢 公司名稱</label>
-                <input type="text" id="companyName" placeholder="自動抓取中...">
+                <input type="text" id="companyName" placeholder="輸入代號後自動帶入">
             </div>
             <div class="field">
                 <label>🗓️ 股東會日期</label>
@@ -109,7 +107,6 @@
         </div>
     </div>
 
-    <!-- 表格區 (欄位順序已調整) -->
     <div class="table-wrapper">
         <table>
             <thead>
@@ -137,7 +134,6 @@
     
     let supabaseClient = null;
 
-    // ================== 初始化 ==================
     function initSupabase() {
         try {
             if (typeof window.supabase === 'undefined') {
@@ -152,7 +148,6 @@
         }
     }
 
-    // ================== 年份選單 ==================
     async function loadYears() {
         if (!supabaseClient) return;
         const { data, error } = await supabaseClient
@@ -192,7 +187,6 @@
         await loadData();
     }
 
-    // ================== 載入資料（依年份過濾） ==================
     async function loadData() {
         if (!supabaseClient) return;
 
@@ -215,15 +209,13 @@
         renderTable(data);
     }
 
-    // ================== 輔助函數：計算電子投票始日 (股東會前30天) ==================
     function getVoteStartDate(meetingDateStr) {
         if (!meetingDateStr) return '-';
         const d = new Date(meetingDateStr);
-        d.setDate(d.getDate() - 30); // 假設電子投票開始日為股東會前30天
+        d.setDate(d.getDate() - 30); 
         return d.toISOString().split('T')[0];
     }
 
-    // ================== 表格渲染（新欄位順序） ==================
     function renderTable(data) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
@@ -250,33 +242,44 @@
         });
     }
 
-    // ================== 公司名稱自動帶入（上市/上櫃） ==================
+    // ================== 公司名稱自動帶入（優化版） ==================
     document.getElementById('stockCode').addEventListener('blur', function() {
         const code = this.value.trim();
-        if(!code) return;
-        
         const companyInput = document.getElementById('companyName');
+        
+        if(!code) {
+            companyInput.value = "";
+            return;
+        }
+        
         companyInput.placeholder = "搜尋中...";
 
-        const cbName = 'twseCb_' + Date.now();
-        window[cbName] = function(data) {
-            if(data?.msgArray?.[0]?.n) {
-                companyInput.value = data.msgArray[0].n;
-            } else {
-                const otcCbName = 'otcCb_' + Date.now();
-                window[otcCbName] = function(otcData) {
-                    if(otcData?.msgArray?.[0]?.n) {
-                        companyInput.value = otcData.msgArray[0].n;
-                    } else {
-                        companyInput.placeholder = "未找到公司名稱";
-                    }
-                    delete window[otcCbName];
+        // 使用 Promise 封裝 JSONP 請求
+        const fetchName = (market) => {
+            return new Promise((resolve) => {
+                const cbName = `stock_cb_${market}_${Date.now()}`;
+                window[cbName] = (data) => {
+                    delete window[cbName];
+                    resolve(data?.msgArray?.[0]?.n || null);
                 };
-                injectScript(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_${code}.tw&json=1&callback=${otcCbName}`);
-            }
-            delete window[cbName];
+                injectScript(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${market}_${code}.tw&json=1&callback=${cbName}`);
+            });
         };
-        injectScript(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${code}.tw&json=1&callback=${cbName}`);
+
+        // 優先查上市 (tse)，若無則查上櫃 (otc)
+        fetchName('tse').then(name => {
+            if (name) {
+                companyInput.value = name;
+            } else {
+                return fetchName('otc');
+            }
+        }).then(name => {
+            if (name) {
+                companyInput.value = name;
+            } else if (!companyInput.value) {
+                companyInput.placeholder = "找不到公司名稱";
+            }
+        });
     });
 
     function injectScript(src) {
@@ -286,7 +289,6 @@
         setTimeout(() => document.body.removeChild(script), 2000);
     }
 
-    // ================== 日期計算 ==================
     function calculateDates(meetingDateStr) {
         if (!meetingDateStr) return { lastBuy: null, voteEnd: null };
         const format = date => date.toISOString().split('T')[0];
@@ -298,14 +300,12 @@
         return { lastBuy: format(lastBuyDate), voteEnd: format(voteEndDate) };
     }
 
-    // ================== ICS 行事曆（使用電子投票始日作為開始） ==================
     function downloadICS(row) {
-        // 需要 meeting_date 來計算 voteStart
         if (!row.meeting_date) return alert('缺少股東會日期，無法建立行事曆');
         if (!row.vote_end_date) return alert('缺少投票截止日期');
         
-        const voteStart = getVoteStartDate(row.meeting_date); // YYYY-MM-DD
-        const startDate = new Date(voteStart + 'T09:00:00'); // 設為上午 9:00
+        const voteStart = getVoteStartDate(row.meeting_date);
+        const startDate = new Date(voteStart + 'T09:00:00');
         const endDate = new Date(row.vote_end_date + 'T09:00:00');
 
         const formatDateICS = (d) => d.toISOString().replace(/-|:|\.\d+/g, "").substring(0, 15) + "Z";
@@ -329,7 +329,6 @@
         link.click();
     }
 
-    // ================== 表單資料擷取 ==================
     function getFormData() {
         const code = document.getElementById('stockCode').value.trim();
         const mDate = document.getElementById('meetingDate').value;
@@ -345,7 +344,6 @@
         };
     }
 
-    // ================== 儲存 ==================
     document.getElementById('saveBtn').addEventListener('click', async () => {
         const record = getFormData();
         if (!record.stock_code || !record.company_name) return alert('請填寫股票代號與名稱');
@@ -357,7 +355,6 @@
         }
     });
 
-    // ================== 更新 ==================
     document.getElementById('updateBtn').addEventListener('click', async () => {
         const id = document.getElementById('editId').value;
         const record = getFormData();
@@ -369,7 +366,6 @@
         }
     });
 
-    // ================== 編輯模式 ==================
     function enterEditMode(row) {
         document.getElementById('editId').value = row.id;
         document.getElementById('stockCode').value = row.stock_code;
@@ -383,7 +379,6 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // ================== 清除表單 ==================
     function clearForm() {
         document.getElementById('editId').value = '';
         document.getElementById('stockCode').value = '';
@@ -393,15 +388,14 @@
         document.getElementById('votedCheckbox').checked = false;
         document.getElementById('saveBtn').style.display = 'inline-block';
         document.getElementById('updateBtn').style.display = 'none';
+        document.getElementById('companyName').placeholder = "輸入代號後自動帶入";
     }
 
-    // ================== 切換投票狀態 ==================
     async function toggleVote(id, isVoted) {
         await supabaseClient.from('stock_gifts').update({ voted: isVoted }).eq('id', id);
         loadYears();
     }
 
-    // ================== 刪除記錄 ==================
     async function deleteRecord(id) {
         if(confirm('確定要刪除嗎？')) {
             await supabaseClient.from('stock_gifts').delete().eq('id', id);
@@ -409,13 +403,9 @@
         }
     }
 
-    // ================== 清除按鈕 ==================
     document.getElementById('clearBtn').addEventListener('click', clearForm);
-
-    // ================== 年份選單變更事件 ==================
     document.getElementById('yearSelect').addEventListener('change', loadData);
 
-    // ================== 啟動 ==================
     window.onload = initSupabase;
 </script>
 </body>
