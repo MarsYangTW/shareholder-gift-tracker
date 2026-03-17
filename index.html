@@ -10,8 +10,11 @@
         * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, 'Microsoft JhengHei', sans-serif; }
         body { background: #f0f4f8; margin: 0; padding: 1rem; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
         .container { max-width: 1300px; width: 100%; }
-        h1 { font-size: 1.8rem; color: #1e3c5c; margin: 0 0 0.5rem 0; }
+        h1 { font-size: 1.8rem; color: #1e3c5c; margin: 0; }
         .sync-status { font-size: 0.85rem; padding: 0.3rem 0.8rem; border-radius: 20px; background: #eef4fa; color: #2c5f8a; display: inline-flex; align-items: center; gap: 5px;}
+        .year-filter { display: flex; align-items: center; gap: 8px; }
+        .year-filter label { font-size: 0.9rem; font-weight: 600; color: #1e3c5c; }
+        .year-filter select { padding: 0.3rem 0.8rem; border-radius: 20px; border: 1px solid #ccdae8; background: white; font-size: 0.9rem; cursor: pointer; }
         
         /* 表單樣式 */
         .form-card { background: white; border-radius: 20px; padding: 1.5rem; box-shadow: 0 8px 20px rgba(0,30,60,0.05); margin-bottom: 1.5rem; }
@@ -22,7 +25,7 @@
         .field input:focus { border-color: #4a90e2; box-shadow: 0 0 0 2px rgba(74,144,226,0.2); }
         
         /* 按鈕樣式 */
-        .btn-group { grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+        .btn-group { grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; }
         .btn { padding: 0.6rem 1.5rem; border-radius: 12px; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; }
         .btn-primary { background: #1e3c5c; color: white; }
         .btn-update { background: #28a745; color: white; display: none; }
@@ -30,7 +33,7 @@
         
         /* 表格與手機版 RWD */
         .table-wrapper { background: white; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,20,40,0.05); overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 800px; }
+        table { width: 100%; border-collapse: collapse; min-width: 900px; } /* 增加寬度以容納新欄位 */
         th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e4edf5; }
         th { background: #f7fafd; color: #1c3f5c; font-size: 0.9rem; }
         .badge { padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: bold; }
@@ -49,21 +52,32 @@
             td:nth-of-type(2):before { content: "公司"; }
             td:nth-of-type(3):before { content: "最後買進"; }
             td:nth-of-type(4):before { content: "股東會"; }
-            td:nth-of-type(5):before { content: "投票截止"; }
-            td:nth-of-type(6):before { content: "狀態"; }
-            td:nth-of-type(7):before { content: "紀念品"; }
-            td:nth-of-type(8):before { content: "已投票"; }
-            td:nth-of-type(9):before { content: "操作"; }
+            td:nth-of-type(5):before { content: "電子投票始日"; }
+            td:nth-of-type(6):before { content: "電子投票截止"; }
+            td:nth-of-type(7):before { content: "狀態"; }
+            td:nth-of-type(8):before { content: "紀念品"; }
+            td:nth-of-type(9):before { content: "已投票"; }
+            td:nth-of-type(10):before { content: "操作"; }
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+    <!-- 標題列 + 年度篩選 + 同步狀態 -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 1rem;">
         <h1>🗳️ 股東會紀念品</h1>
-        <div class="sync-status" id="syncStatus">☁️ 正在初始化...</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="year-filter">
+                <label for="yearSelect">年度：</label>
+                <select id="yearSelect">
+                    <option value="all">所有年度</option>
+                </select>
+            </div>
+            <div class="sync-status" id="syncStatus">☁️ 正在初始化...</div>
+        </div>
     </div>
 
+    <!-- 表單卡片 -->
     <div class="form-card">
         <input type="hidden" id="editId">
         <div class="form-grid">
@@ -95,11 +109,21 @@
         </div>
     </div>
 
+    <!-- 表格區 (欄位順序已調整) -->
     <div class="table-wrapper">
         <table>
             <thead>
                 <tr>
-                    <th>代號</th><th>公司</th><th>最後買進日</th><th>股東會日</th><th>投票截止</th><th>狀態</th><th>紀念品</th><th>已投</th><th>操作</th>
+                    <th>代號</th>
+                    <th>公司</th>
+                    <th>最後買進日</th>
+                    <th>股東會日</th>
+                    <th>電子投票始日</th>
+                    <th>電子投票截止</th>
+                    <th>狀態</th>
+                    <th>紀念品</th>
+                    <th>已投</th>
+                    <th>操作</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -113,6 +137,7 @@
     
     let supabaseClient = null;
 
+    // ================== 初始化 ==================
     function initSupabase() {
         try {
             if (typeof window.supabase === 'undefined') {
@@ -120,14 +145,112 @@
                 return;
             }
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            document.getElementById('syncStatus').innerText = '🟢 已連線並自動同步 (依截止日排序)';
-            loadData(); 
+            document.getElementById('syncStatus').innerText = '🟢 已連線';
+            loadYears(); 
         } catch (e) {
             document.getElementById('syncStatus').innerText = '🔴 連線資訊錯誤';
         }
     }
 
-    // 1. 修正公司名稱自動帶入 (支援上市、上櫃)
+    // ================== 年份選單 ==================
+    async function loadYears() {
+        if (!supabaseClient) return;
+        const { data, error } = await supabaseClient
+            .from('stock_gifts')
+            .select('meeting_date')
+            .not('meeting_date', 'is', null);
+        if (error) {
+            console.error('讀取年份失敗:', error);
+            return;
+        }
+
+        const yearsSet = new Set();
+        data.forEach(item => {
+            if (item.meeting_date) {
+                const year = item.meeting_date.substring(0, 4);
+                yearsSet.add(year);
+            }
+        });
+        const years = Array.from(yearsSet).sort((a, b) => b - a);
+
+        const select = document.getElementById('yearSelect');
+        const currentValue = select.value;
+        select.innerHTML = '<option value="all">所有年度</option>';
+        years.forEach(y => {
+            const option = document.createElement('option');
+            option.value = y;
+            option.textContent = y;
+            select.appendChild(option);
+        });
+
+        if (years.includes(currentValue)) {
+            select.value = currentValue;
+        } else {
+            select.value = 'all';
+        }
+
+        await loadData();
+    }
+
+    // ================== 載入資料（依年份過濾） ==================
+    async function loadData() {
+        if (!supabaseClient) return;
+
+        const year = document.getElementById('yearSelect').value;
+        let query = supabaseClient.from('stock_gifts').select('*');
+
+        if (year !== 'all') {
+            const start = `${year}-01-01`;
+            const end = `${parseInt(year) + 1}-01-01`;
+            query = query.gte('meeting_date', start).lt('meeting_date', end);
+        }
+
+        query = query.order('vote_end_date', { ascending: true });
+
+        const { data, error } = await query;
+        if (error) {
+            console.error('讀取資料失敗:', error);
+            return;
+        }
+        renderTable(data);
+    }
+
+    // ================== 輔助函數：計算電子投票始日 (股東會前30天) ==================
+    function getVoteStartDate(meetingDateStr) {
+        if (!meetingDateStr) return '-';
+        const d = new Date(meetingDateStr);
+        d.setDate(d.getDate() - 30); // 假設電子投票開始日為股東會前30天
+        return d.toISOString().split('T')[0];
+    }
+
+    // ================== 表格渲染（新欄位順序） ==================
+    function renderTable(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        data.forEach(row => {
+            const voteStart = getVoteStartDate(row.meeting_date);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${row.stock_code}</td>
+                <td>${row.company_name}</td>
+                <td>${row.last_buy_date || '-'}</td>
+                <td>${row.meeting_date || '-'}</td>
+                <td>${voteStart}</td>
+                <td>${row.vote_end_date || '-'}</td>
+                <td><span class="badge ${row.voted ? 'badge-done' : 'badge-warning'}">${row.voted ? '已完成' : '未投票'}</span></td>
+                <td>${row.gift || '-'}</td>
+                <td><input type="checkbox" ${row.voted ? 'checked' : ''} onchange="toggleVote(${row.id}, this.checked)"></td>
+                <td>
+                    <button class="btn-icon" title="新增行事曆" onclick='downloadICS(${JSON.stringify(row)})'>📅</button>
+                    <button class="btn-icon" title="編輯" onclick='enterEditMode(${JSON.stringify(row)})'>✏️</button>
+                    <button class="btn-icon" title="刪除" onclick="deleteRecord(${row.id})">🗑️</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ================== 公司名稱自動帶入（上市/上櫃） ==================
     document.getElementById('stockCode').addEventListener('blur', function() {
         const code = this.value.trim();
         if(!code) return;
@@ -140,7 +263,6 @@
             if(data?.msgArray?.[0]?.n) {
                 companyInput.value = data.msgArray[0].n;
             } else {
-                // 如果上市查不到，嘗試查上櫃
                 const otcCbName = 'otcCb_' + Date.now();
                 window[otcCbName] = function(otcData) {
                     if(otcData?.msgArray?.[0]?.n) {
@@ -164,34 +286,38 @@
         setTimeout(() => document.body.removeChild(script), 2000);
     }
 
+    // ================== 日期計算 ==================
     function calculateDates(meetingDateStr) {
         if (!meetingDateStr) return { lastBuy: null, voteEnd: null };
         const format = date => date.toISOString().split('T')[0];
         const meetingDate = new Date(meetingDateStr);
-        const lastBuyDate = new Date(new Date(meetingDate).setDate(meetingDate.getDate() - 62));
-        const voteEndDate = new Date(new Date(meetingDate).setDate(meetingDate.getDate() - 3));
+        const lastBuyDate = new Date(meetingDate);
+        lastBuyDate.setDate(lastBuyDate.getDate() - 62);
+        const voteEndDate = new Date(meetingDate);
+        voteEndDate.setDate(voteEndDate.getDate() - 3);
         return { lastBuy: format(lastBuyDate), voteEnd: format(voteEndDate) };
     }
 
-    // 2. ICS 行事曆下載功能
+    // ================== ICS 行事曆（使用電子投票始日作為開始） ==================
     function downloadICS(row) {
+        // 需要 meeting_date 來計算 voteStart
+        if (!row.meeting_date) return alert('缺少股東會日期，無法建立行事曆');
         if (!row.vote_end_date) return alert('缺少投票截止日期');
         
-        // 提醒日期設為截止日前 30 天 (電子投票通常開始的時間)
-        const startDate = new Date(row.vote_end_date);
-        startDate.setDate(startDate.getDate() - 25); 
-        const endDate = new Date(row.vote_end_date);
+        const voteStart = getVoteStartDate(row.meeting_date); // YYYY-MM-DD
+        const startDate = new Date(voteStart + 'T09:00:00'); // 設為上午 9:00
+        const endDate = new Date(row.vote_end_date + 'T09:00:00');
 
-        const formatDateICS = (d) => d.toISOString().replace(/-|:|\.\d+/g, "").split('T')[0] + "T090000Z";
+        const formatDateICS = (d) => d.toISOString().replace(/-|:|\.\d+/g, "").substring(0, 15) + "Z";
         
         const icsContent = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",
             "BEGIN:VEVENT",
-            `SUMMARY:【電子投票開始】${row.company_name} (${row.stock_code})`,
+            `SUMMARY:【電子投票期間】${row.company_name} (${row.stock_code})`,
             `DTSTART:${formatDateICS(startDate)}`,
             `DTEND:${formatDateICS(endDate)}`,
-            `DESCRIPTION:記得參加電子投票領取：${row.gift || '紀念品'}`,
+            `DESCRIPTION:投票截止日：${row.vote_end_date}  紀念品：${row.gift || '未填'}`,
             "END:VEVENT",
             "END:VCALENDAR"
         ].join("\r\n");
@@ -199,34 +325,11 @@
         const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = `${row.company_name}_電子投票提醒.ics`;
+        link.download = `${row.company_name}_電子投票期間.ics`;
         link.click();
     }
 
-    // 3. 排序與讀取 (依據電子投票時間排序)
-    async function loadData() {
-        if (!supabaseClient) return;
-        // 改為依據投票截止日排序 (升冪，讓即將到期的排在上面)
-        const { data, error } = await supabaseClient.from('stock_gifts').select('*').order('vote_end_date', { ascending: true });
-        if (error) return;
-        renderTable(data);
-    }
-
-    // 4. 儲存與編輯
-    document.getElementById('saveBtn').addEventListener('click', async () => {
-        const record = getFormData();
-        if (!record.stock_code || !record.company_name) return alert('請填寫股票代號與名稱');
-        const { error } = await supabaseClient.from('stock_gifts').insert([record]);
-        if (error) alert('儲存失敗'); else { clearForm(); loadData(); }
-    });
-
-    document.getElementById('updateBtn').addEventListener('click', async () => {
-        const id = document.getElementById('editId').value;
-        const record = getFormData();
-        const { error } = await supabaseClient.from('stock_gifts').update(record).eq('id', id);
-        if (error) alert('更新失敗'); else { clearForm(); loadData(); }
-    });
-
+    // ================== 表單資料擷取 ==================
     function getFormData() {
         const code = document.getElementById('stockCode').value.trim();
         const mDate = document.getElementById('meetingDate').value;
@@ -242,30 +345,31 @@
         };
     }
 
-    function renderTable(data) {
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '';
-        data.forEach(row => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${row.stock_code}</td>
-                <td>${row.company_name}</td>
-                <td>${row.last_buy_date || '-'}</td>
-                <td>${row.meeting_date || '-'}</td>
-                <td>${row.vote_end_date || '-'}</td>
-                <td><span class="badge ${row.voted ? 'badge-done' : 'badge-warning'}">${row.voted ? '已完成' : '未投票'}</span></td>
-                <td>${row.gift || '-'}</td>
-                <td><input type="checkbox" ${row.voted ? 'checked' : ''} onchange="toggleVote(${row.id}, this.checked)"></td>
-                <td>
-                    <button class="btn-icon" title="新增行事曆" onclick='downloadICS(${JSON.stringify(row)})'>📅</button>
-                    <button class="btn-icon" title="編輯" onclick='enterEditMode(${JSON.stringify(row)})'>✏️</button>
-                    <button class="btn-icon" title="刪除" onclick="deleteRecord(${row.id})">🗑️</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    }
+    // ================== 儲存 ==================
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+        const record = getFormData();
+        if (!record.stock_code || !record.company_name) return alert('請填寫股票代號與名稱');
+        const { error } = await supabaseClient.from('stock_gifts').insert([record]);
+        if (error) alert('儲存失敗：' + error.message); 
+        else { 
+            clearForm(); 
+            loadYears(); 
+        }
+    });
 
+    // ================== 更新 ==================
+    document.getElementById('updateBtn').addEventListener('click', async () => {
+        const id = document.getElementById('editId').value;
+        const record = getFormData();
+        const { error } = await supabaseClient.from('stock_gifts').update(record).eq('id', id);
+        if (error) alert('更新失敗：' + error.message); 
+        else { 
+            clearForm(); 
+            loadYears(); 
+        }
+    });
+
+    // ================== 編輯模式 ==================
     function enterEditMode(row) {
         document.getElementById('editId').value = row.id;
         document.getElementById('stockCode').value = row.stock_code;
@@ -279,6 +383,7 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    // ================== 清除表單 ==================
     function clearForm() {
         document.getElementById('editId').value = '';
         document.getElementById('stockCode').value = '';
@@ -290,19 +395,27 @@
         document.getElementById('updateBtn').style.display = 'none';
     }
 
+    // ================== 切換投票狀態 ==================
     async function toggleVote(id, isVoted) {
         await supabaseClient.from('stock_gifts').update({ voted: isVoted }).eq('id', id);
-        loadData();
+        loadYears();
     }
 
+    // ================== 刪除記錄 ==================
     async function deleteRecord(id) {
         if(confirm('確定要刪除嗎？')) {
             await supabaseClient.from('stock_gifts').delete().eq('id', id);
-            loadData();
+            loadYears();
         }
     }
 
+    // ================== 清除按鈕 ==================
     document.getElementById('clearBtn').addEventListener('click', clearForm);
+
+    // ================== 年份選單變更事件 ==================
+    document.getElementById('yearSelect').addEventListener('change', loadData);
+
+    // ================== 啟動 ==================
     window.onload = initSupabase;
 </script>
 </body>
