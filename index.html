@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
-    <title>股東會紀念品 · 雲端同步版</title>
+    <title>股東會紀念品 · 雲端同步增強版</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         /* 基礎樣式 */
         * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, 'Microsoft JhengHei', sans-serif; }
         body { background: #f0f4f8; margin: 0; padding: 1rem; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
-        .container { max-width: 1200px; width: 100%; }
+        .container { max-width: 1300px; width: 100%; }
         h1 { font-size: 1.8rem; color: #1e3c5c; margin: 0 0 0.5rem 0; }
         .sync-status { font-size: 0.85rem; padding: 0.3rem 0.8rem; border-radius: 20px; background: #eef4fa; color: #2c5f8a; display: inline-flex; align-items: center; gap: 5px;}
         
@@ -25,17 +25,19 @@
         .btn-group { grid-column: 1 / -1; display: flex; gap: 0.5rem; margin-top: 0.5rem; }
         .btn { padding: 0.6rem 1.5rem; border-radius: 12px; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; }
         .btn-primary { background: #1e3c5c; color: white; }
+        .btn-update { background: #28a745; color: white; display: none; }
         .btn-secondary { background: #eef4fa; color: #1e3c5c; border: 1px solid #cbd6e4; }
         
         /* 表格與手機版 RWD */
-        .table-wrapper { background: white; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,20,40,0.05); overflow: hidden; }
-        table { width: 100%; border-collapse: collapse; }
+        .table-wrapper { background: white; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,20,40,0.05); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 800px; }
         th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e4edf5; }
         th { background: #f7fafd; color: #1c3f5c; font-size: 0.9rem; }
         .badge { padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.8rem; font-weight: bold; }
         .badge-done { background: #d4e3fd; color: #1f5090; }
         .badge-warning { background: #fff0cf; color: #9e7100; }
-        
+        .btn-icon { background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 2px; }
+
         @media (max-width: 768px) {
             .table-wrapper { background: transparent; box-shadow: none; }
             table, thead, tbody, th, td, tr { display: block; }
@@ -63,6 +65,7 @@
     </div>
 
     <div class="form-card">
+        <input type="hidden" id="editId">
         <div class="form-grid">
             <div class="field">
                 <label>📌 股票代號</label>
@@ -70,7 +73,7 @@
             </div>
             <div class="field">
                 <label>🏢 公司名稱</label>
-                <input type="text" id="companyName" placeholder="自動帶入或手動">
+                <input type="text" id="companyName" placeholder="自動抓取中...">
             </div>
             <div class="field">
                 <label>🗓️ 股東會日期</label>
@@ -86,7 +89,8 @@
             </div>
             <div class="btn-group">
                 <button class="btn btn-primary" id="saveBtn">💾 儲存並同步</button>
-                <button class="btn btn-secondary" id="clearBtn">🔄 清除</button>
+                <button class="btn btn-update" id="updateBtn">✅ 更新資料</button>
+                <button class="btn btn-secondary" id="clearBtn">🔄 取消/清除</button>
             </div>
         </div>
     </div>
@@ -95,7 +99,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>代號</th><th>公司</th><th>最後買進日</th><th>股東會日</th><th>投票截止</th><th>狀態</th><th>紀念品</th><th>投票</th><th>操作</th>
+                    <th>代號</th><th>公司</th><th>最後買進日</th><th>股東會日</th><th>投票截止</th><th>狀態</th><th>紀念品</th><th>已投</th><th>操作</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -104,102 +108,140 @@
 </div>
 
 <script>
-    // 1. 配置資訊
     const SUPABASE_URL = 'https://tkxodvlpbebwnpaqqnlp.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRreG9kdmxwYmVid25wYXFxbmxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2NzQ3MzAsImV4cCI6MjA4OTI1MDczMH0.t1QNqkOeHcQfFZBTLMuvDJk4KnaNUiZHgKaIXLB9xY0';
     
-    // 宣告客戶端變數（避開與 window.supabase 同名）
     let supabaseClient = null;
 
-    // 2. 初始化函數
     function initSupabase() {
         try {
             if (typeof window.supabase === 'undefined') {
                 document.getElementById('syncStatus').innerText = '🔴 SDK 載入失敗';
                 return;
             }
-            // 建立客戶端
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            document.getElementById('syncStatus').innerText = '🟢 已連線並自動同步';
+            document.getElementById('syncStatus').innerText = '🟢 已連線並自動同步 (依截止日排序)';
             loadData(); 
         } catch (e) {
-            console.error('初始化失敗:', e);
             document.getElementById('syncStatus').innerText = '🔴 連線資訊錯誤';
         }
     }
 
-    // 3. 日期計算邏輯
+    // 1. 修正公司名稱自動帶入 (支援上市、上櫃)
+    document.getElementById('stockCode').addEventListener('blur', function() {
+        const code = this.value.trim();
+        if(!code) return;
+        
+        const companyInput = document.getElementById('companyName');
+        companyInput.placeholder = "搜尋中...";
+
+        const cbName = 'twseCb_' + Date.now();
+        window[cbName] = function(data) {
+            if(data?.msgArray?.[0]?.n) {
+                companyInput.value = data.msgArray[0].n;
+            } else {
+                // 如果上市查不到，嘗試查上櫃
+                const otcCbName = 'otcCb_' + Date.now();
+                window[otcCbName] = function(otcData) {
+                    if(otcData?.msgArray?.[0]?.n) {
+                        companyInput.value = otcData.msgArray[0].n;
+                    } else {
+                        companyInput.placeholder = "未找到公司名稱";
+                    }
+                    delete window[otcCbName];
+                };
+                injectScript(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_${code}.tw&json=1&callback=${otcCbName}`);
+            }
+            delete window[cbName];
+        };
+        injectScript(`https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${code}.tw&json=1&callback=${cbName}`);
+    });
+
+    function injectScript(src) {
+        const script = document.createElement('script');
+        script.src = src;
+        document.body.appendChild(script);
+        setTimeout(() => document.body.removeChild(script), 2000);
+    }
+
     function calculateDates(meetingDateStr) {
         if (!meetingDateStr) return { lastBuy: null, voteEnd: null };
         const format = date => date.toISOString().split('T')[0];
         const meetingDate = new Date(meetingDateStr);
-        const lastBuyDate = new Date(meetingDate);
-        lastBuyDate.setDate(lastBuyDate.getDate() - 62);
-        const voteEndDate = new Date(meetingDate);
-        voteEndDate.setDate(voteEndDate.getDate() - 3);
+        const lastBuyDate = new Date(new Date(meetingDate).setDate(meetingDate.getDate() - 62));
+        const voteEndDate = new Date(new Date(meetingDate).setDate(meetingDate.getDate() - 3));
         return { lastBuy: format(lastBuyDate), voteEnd: format(voteEndDate) };
     }
 
-    // 4. 自動抓取台股公司名稱
-    document.getElementById('stockCode').addEventListener('blur', function() {
-        const code = this.value.trim();
-        if(!code) return;
-        const script = document.createElement('script');
-        const cbName = 'twseCb_' + Date.now();
-        window[cbName] = function(data) {
-            if(data?.msgArray?.[0]?.n) {
-                document.getElementById('companyName').value = data.msgArray[0].n;
-            }
-            delete window[cbName];
-        };
-        script.src = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${code}.tw&json=1&delay=0&_=${Date.now()}&callback=${cbName}`;
-        document.body.appendChild(script);
-    });
+    // 2. ICS 行事曆下載功能
+    function downloadICS(row) {
+        if (!row.vote_end_date) return alert('缺少投票截止日期');
+        
+        // 提醒日期設為截止日前 30 天 (電子投票通常開始的時間)
+        const startDate = new Date(row.vote_end_date);
+        startDate.setDate(startDate.getDate() - 25); 
+        const endDate = new Date(row.vote_end_date);
 
-    // 5. 從 Supabase 讀取資料
+        const formatDateICS = (d) => d.toISOString().replace(/-|:|\.\d+/g, "").split('T')[0] + "T090000Z";
+        
+        const icsContent = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "BEGIN:VEVENT",
+            `SUMMARY:【電子投票開始】${row.company_name} (${row.stock_code})`,
+            `DTSTART:${formatDateICS(startDate)}`,
+            `DTEND:${formatDateICS(endDate)}`,
+            `DESCRIPTION:記得參加電子投票領取：${row.gift || '紀念品'}`,
+            "END:VEVENT",
+            "END:VCALENDAR"
+        ].join("\r\n");
+
+        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `${row.company_name}_電子投票提醒.ics`;
+        link.click();
+    }
+
+    // 3. 排序與讀取 (依據電子投票時間排序)
     async function loadData() {
         if (!supabaseClient) return;
-        const { data, error } = await supabaseClient.from('stock_gifts').select('*').order('meeting_date', { ascending: false });
-        if (error) {
-            console.error('讀取失敗:', error);
-            return;
-        }
+        // 改為依據投票截止日排序 (升冪，讓即將到期的排在上面)
+        const { data, error } = await supabaseClient.from('stock_gifts').select('*').order('vote_end_date', { ascending: true });
+        if (error) return;
         renderTable(data);
     }
 
-    // 6. 儲存資料
+    // 4. 儲存與編輯
     document.getElementById('saveBtn').addEventListener('click', async () => {
-        if (!supabaseClient) return alert('尚未連線到資料庫');
-        
+        const record = getFormData();
+        if (!record.stock_code || !record.company_name) return alert('請填寫股票代號與名稱');
+        const { error } = await supabaseClient.from('stock_gifts').insert([record]);
+        if (error) alert('儲存失敗'); else { clearForm(); loadData(); }
+    });
+
+    document.getElementById('updateBtn').addEventListener('click', async () => {
+        const id = document.getElementById('editId').value;
+        const record = getFormData();
+        const { error } = await supabaseClient.from('stock_gifts').update(record).eq('id', id);
+        if (error) alert('更新失敗'); else { clearForm(); loadData(); }
+    });
+
+    function getFormData() {
         const code = document.getElementById('stockCode').value.trim();
-        const name = document.getElementById('companyName').value.trim();
         const mDate = document.getElementById('meetingDate').value;
-        const gift = document.getElementById('gift').value;
-        const voted = document.getElementById('votedCheckbox').checked;
-
-        if (!code || !name) return alert('請填寫股票代號與名稱');
-
         const dates = calculateDates(mDate);
-        const record = { 
+        return { 
             stock_code: code, 
-            company_name: name, 
+            company_name: document.getElementById('companyName').value.trim(), 
             meeting_date: mDate || null, 
             last_buy_date: dates.lastBuy, 
             vote_end_date: dates.voteEnd, 
-            gift: gift, 
-            voted: voted 
+            gift: document.getElementById('gift').value, 
+            voted: document.getElementById('votedCheckbox').checked 
         };
+    }
 
-        const { error } = await supabaseClient.from('stock_gifts').insert([record]);
-        if (error) alert('儲存失敗：' + error.message);
-        else {
-            alert('同步成功！');
-            clearForm();
-            loadData();
-        }
-    });
-
-    // 7. 渲染表格
     function renderTable(data) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
@@ -214,38 +256,53 @@
                 <td><span class="badge ${row.voted ? 'badge-done' : 'badge-warning'}">${row.voted ? '已完成' : '未投票'}</span></td>
                 <td>${row.gift || '-'}</td>
                 <td><input type="checkbox" ${row.voted ? 'checked' : ''} onchange="toggleVote(${row.id}, this.checked)"></td>
-                <td><button class="btn btn-secondary" style="padding: 0.3rem 0.6rem;" onclick="deleteRecord(${row.id})">🗑️</button></td>
+                <td>
+                    <button class="btn-icon" title="新增行事曆" onclick='downloadICS(${JSON.stringify(row)})'>📅</button>
+                    <button class="btn-icon" title="編輯" onclick='enterEditMode(${JSON.stringify(row)})'>✏️</button>
+                    <button class="btn-icon" title="刪除" onclick="deleteRecord(${row.id})">🗑️</button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
     }
 
-    // 8. 快速更新投票狀態
-    async function toggleVote(id, isVoted) {
-        if (!supabaseClient) return;
-        await supabaseClient.from('stock_gifts').update({ voted: isVoted }).eq('id', id);
-        loadData();
-    }
-
-    // 9. 刪除記錄
-    async function deleteRecord(id) {
-        if(confirm('確定要刪除這筆記錄嗎？')) {
-            await supabaseClient.from('stock_gifts').delete().eq('id', id);
-            loadData();
-        }
+    function enterEditMode(row) {
+        document.getElementById('editId').value = row.id;
+        document.getElementById('stockCode').value = row.stock_code;
+        document.getElementById('companyName').value = row.company_name;
+        document.getElementById('meetingDate').value = row.meeting_date;
+        document.getElementById('gift').value = row.gift;
+        document.getElementById('votedCheckbox').checked = row.voted;
+        
+        document.getElementById('saveBtn').style.display = 'none';
+        document.getElementById('updateBtn').style.display = 'inline-block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function clearForm() {
+        document.getElementById('editId').value = '';
         document.getElementById('stockCode').value = '';
         document.getElementById('companyName').value = '';
         document.getElementById('meetingDate').value = '';
         document.getElementById('gift').value = '';
         document.getElementById('votedCheckbox').checked = false;
+        document.getElementById('saveBtn').style.display = 'inline-block';
+        document.getElementById('updateBtn').style.display = 'none';
+    }
+
+    async function toggleVote(id, isVoted) {
+        await supabaseClient.from('stock_gifts').update({ voted: isVoted }).eq('id', id);
+        loadData();
+    }
+
+    async function deleteRecord(id) {
+        if(confirm('確定要刪除嗎？')) {
+            await supabaseClient.from('stock_gifts').delete().eq('id', id);
+            loadData();
+        }
     }
 
     document.getElementById('clearBtn').addEventListener('click', clearForm);
-
-    // 啟動初始化
     window.onload = initSupabase;
 </script>
 </body>
